@@ -14,6 +14,7 @@ previous = "Previous"
 search = "Search"
 
 [kit.auth]
+invalid_credentials = "That email or password is not correct"
 choose_institution = "Choose an institution"
 choose_institution_help = "This email belongs to more than one institution"
 email = "Email"
@@ -33,6 +34,7 @@ not_recorded = "Not recorded"
 optional = "Optional"
 
 [kit.error]
+validation = "Some details aren't right — please check them"
 busy = "Too many documents are printing right now"
 busy_help = "Nothing is wrong with this document. Wait a moment and print it again."
 forbidden = "You don't have permission to do that"

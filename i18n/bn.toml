@@ -14,6 +14,7 @@ previous = "পূর্ববর্তী"
 search = "খুঁজুন"
 
 [kit.auth]
+invalid_credentials = "ইমেইল বা পাসওয়ার্ড সঠিক নয়"
 choose_institution = "প্রতিষ্ঠান নির্বাচন করুন"
 choose_institution_help = "এই ইমেইলটি একাধিক প্রতিষ্ঠানে যুক্ত"
 email = "ইমেইল"
@@ -33,6 +34,7 @@ not_recorded = "উল্লেখ নেই"
 optional = "ঐচ্ছিক"
 
 [kit.error]
+validation = "কিছু তথ্য সঠিক নয়, দেখে নিন"
 busy = "এই মুহূর্তে অনেকগুলো নথি প্রিন্ট হচ্ছে"
 busy_help = "নথিতে কোনো সমস্যা নেই। একটু পরে আবার প্রিন্ট করুন।"
 forbidden = "এই কাজটি করার অনুমতি আপনার নেই"
