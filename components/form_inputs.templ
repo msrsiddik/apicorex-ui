@@ -7,7 +7,10 @@ import "github.com/msrsiddik/apicorex-ui/i18n"
 
 // SelectProps describes a dropdown.
 type SelectProps struct {
-	Name        string
+	Name string
+	// ID is the control's DOM id, and what its label points at. Defaults to
+	// Name — see FieldProps.ID for why a repeated control needs its own.
+	ID          string
 	Label       string // already translated
 	Value       string
 	Options     []Option
@@ -20,7 +23,7 @@ type SelectProps struct {
 
 templ SelectField(p SelectProps) {
 	<div class="space-y-1.5">
-		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+		<label class="flex items-baseline justify-between gap-2" for={ fieldID(p.Name, p.ID) }>
 			<span class="text-sm font-medium">
 				{ p.Label }
 				if p.Required {
@@ -29,7 +32,7 @@ templ SelectField(p SelectProps) {
 			</span>
 		</label>
 		<select
-			id={ p.Name }
+			id={ fieldID(p.Name, p.ID) }
 			name={ p.Name }
 			class={ "select w-full", templ.KV("select-error", p.Error != "") }
 			if p.Required {
@@ -37,7 +40,7 @@ templ SelectField(p SelectProps) {
 			}
 			if p.Error != "" {
 				aria-invalid="true"
-				aria-describedby={ p.Name + "-error" }
+				aria-describedby={ fieldID(p.Name, p.ID) + "-error" }
 			}
 			{ p.Attrs... }
 		>
@@ -52,7 +55,7 @@ templ SelectField(p SelectProps) {
 				}
 			}
 		</select>
-		@fieldFooter(p.Name, p.Help, p.Error)
+		@fieldFooter(fieldID(p.Name, p.ID), p.Help, p.Error)
 	</div>
 }
 
@@ -71,7 +74,7 @@ templ SelectField(p SelectProps) {
 // they had typed.
 templ DateField(p FieldProps) {
 	<div class="space-y-1.5">
-		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+		<label class="flex items-baseline justify-between gap-2" for={ fieldID(p.Name, p.ID) }>
 			<span class="text-sm font-medium">
 				{ p.Label }
 				if p.Required {
@@ -83,7 +86,7 @@ templ DateField(p FieldProps) {
 			}
 		</label>
 		<input
-			id={ p.Name }
+			id={ fieldID(p.Name, p.ID) }
 			name={ p.Name }
 			type={ dateInputType(p) }
 			value={ p.Value }
@@ -93,12 +96,12 @@ templ DateField(p FieldProps) {
 			}
 			if p.Error != "" {
 				aria-invalid="true"
-				aria-describedby={ p.Name + "-error" }
+				aria-describedby={ fieldID(p.Name, p.ID) + "-error" }
 				placeholder="YYYY-MM-DD"
 			}
 			{ p.Attrs... }
 		/>
-		@fieldFooter(p.Name, p.Help, p.Error)
+		@fieldFooter(fieldID(p.Name, p.ID), p.Help, p.Error)
 	</div>
 }
 
@@ -114,7 +117,7 @@ func dateInputType(p FieldProps) string {
 // TextareaField is multi-line text — an address, a note.
 templ TextareaField(p FieldProps) {
 	<div class="space-y-1.5">
-		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+		<label class="flex items-baseline justify-between gap-2" for={ fieldID(p.Name, p.ID) }>
 			<span class="text-sm font-medium">
 				{ p.Label }
 				if p.Required {
@@ -126,7 +129,7 @@ templ TextareaField(p FieldProps) {
 			}
 		</label>
 		<textarea
-			id={ p.Name }
+			id={ fieldID(p.Name, p.ID) }
 			name={ p.Name }
 			rows="2"
 			class={ "textarea w-full", templ.KV("textarea-error", p.Error != "") }
@@ -135,11 +138,11 @@ templ TextareaField(p FieldProps) {
 			}
 			if p.Error != "" {
 				aria-invalid="true"
-				aria-describedby={ p.Name + "-error" }
+				aria-describedby={ fieldID(p.Name, p.ID) + "-error" }
 			}
 			{ p.Attrs... }
 		>{ p.Value }</textarea>
-		@fieldFooter(p.Name, p.Help, p.Error)
+		@fieldFooter(fieldID(p.Name, p.ID), p.Help, p.Error)
 	</div>
 }
 

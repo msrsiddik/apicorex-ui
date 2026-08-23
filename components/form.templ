@@ -14,7 +14,13 @@ import "github.com/msrsiddik/apicorex-ui/i18n"
 
 // FieldProps describes one form input.
 type FieldProps struct {
-	Name  string
+	Name string
+	// ID is the control's DOM id, and what its label points at. Defaults to
+	// Name, which is right for a form with one of each field and wrong the
+	// moment a page repeats a control — a table of rows each carrying an
+	// "account_code" then puts that id on every one of them, and every label
+	// points at the first row's control. Set it per row there.
+	ID    string
 	Label string // already translated
 	Value string
 	Type  string // defaults to "text"
@@ -35,7 +41,7 @@ type FieldProps struct {
 // Field renders a labelled input with its help or error text.
 templ Field(p FieldProps) {
 	<div class="space-y-1.5">
-		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+		<label class="flex items-baseline justify-between gap-2" for={ fieldID(p.Name, p.ID) }>
 			<span class="text-sm font-medium">
 				{ p.Label }
 				if p.Required {
@@ -49,7 +55,7 @@ templ Field(p FieldProps) {
 			}
 		</label>
 		<input
-			id={ p.Name }
+			id={ fieldID(p.Name, p.ID) }
 			name={ p.Name }
 			type={ inputType(p.Type) }
 			value={ p.Value }
@@ -60,12 +66,12 @@ templ Field(p FieldProps) {
 			}
 			if p.Error != "" {
 				aria-invalid="true"
-				aria-describedby={ p.Name + "-error" }
+				aria-describedby={ fieldID(p.Name, p.ID) + "-error" }
 			}
 			{ p.Attrs... }
 		/>
 		if p.Error != "" {
-			<p id={ p.Name + "-error" } class="mt-1 flex items-center gap-1 text-xs text-error">
+			<p id={ fieldID(p.Name, p.ID) + "-error" } class="mt-1 flex items-center gap-1 text-xs text-error">
 				@Icon("alert-circle", "size-3.5 shrink-0")
 				{ p.Error }
 			</p>
@@ -73,6 +79,18 @@ templ Field(p FieldProps) {
 			<p class="text-xs text-base-content/50">{ p.Help }</p>
 		}
 	</div>
+}
+
+// fieldID is the control's id: its own when it has one, its name otherwise.
+//
+// Falling back to the name keeps every existing caller rendering exactly what
+// it did — one field per name is the ordinary case, and naming its id after it
+// is what makes a label written elsewhere on the page able to point at it.
+func fieldID(name, id string) string {
+	if id != "" {
+		return id
+	}
+	return name
 }
 
 func inputType(t string) string {
