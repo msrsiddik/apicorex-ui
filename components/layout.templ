@@ -83,6 +83,49 @@ type NavItem struct {
 	Label string // already translated
 	Icon  string // Lucide icon name
 	Href  string
+	// Group is which product an entry belongs to, and GroupLabel is that
+	// product's name, already translated. A merged sidebar without them is a
+	// flat list where a ledger entry sits directly under a school's dashboard
+	// with nothing saying they are different products.
+	//
+	// Both are optional: a single-product sidebar leaves them empty and renders
+	// exactly as it did before groups existed.
+	Group      string
+	GroupLabel string
+}
+
+// navSection is a run of consecutive entries sharing a group. Built from the
+// order the caller passed, never re-sorted: which product comes first is
+// decided upstream, where the whole suite is visible.
+type navSection struct {
+	Label string
+	Items []NavItem
+}
+
+// navSections splits the sidebar into labelled sections, or returns one
+// unlabelled section when there is nothing to separate.
+//
+// One section stays unlabelled deliberately: a heading over the only group in
+// the menu names something the user cannot be confused about, and costs a line
+// of vertical space in a sidebar that has none to spare.
+func navSections(items []NavItem) []navSection {
+	distinct := map[string]bool{}
+	for _, it := range items {
+		distinct[it.Group] = true
+	}
+	if len(distinct) < 2 {
+		return []navSection{{Items: items}}
+	}
+	var out []navSection
+	prev := ""
+	for i, it := range items {
+		if i == 0 || it.Group != prev {
+			out = append(out, navSection{Label: it.GroupLabel})
+			prev = it.Group
+		}
+		out[len(out)-1].Items = append(out[len(out)-1].Items, it)
+	}
+	return out
 }
 
 // Shell is the application frame: sidebar, header, and the page body.
@@ -172,9 +215,18 @@ templ sidebar(p Page) {
 				@Icon("x", "size-4")
 			</button>
 		</div>
-		<nav class="flex flex-col gap-0.5 overflow-y-auto p-3" aria-label={ i18n.T(ctx, "kit.nav.dashboard") }>
-			for _, item := range p.Nav {
-				@navLink(item, item.Key == p.Active)
+		<nav class="flex flex-col overflow-y-auto p-3" aria-label={ i18n.T(ctx, "kit.nav.dashboard") }>
+			for i, section := range navSections(p.Nav) {
+				<div class={ "flex flex-col gap-0.5", templ.KV("mt-4", i > 0) }>
+					if section.Label != "" {
+						<div class="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-base-content/45">
+							{ section.Label }
+						</div>
+					}
+					for _, item := range section.Items {
+						@navLink(item, item.Key == p.Active)
+					}
+				</div>
 			}
 		</nav>
 	</aside>
