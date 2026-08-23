@@ -1,0 +1,44 @@
+# The kit's own strings, and only those, namespaced kit.* — so a consumer's
+# key can never collide with one of these, and no merge-precedence rule is
+# needed. Precedence rules are always wrong for somebody.
+#
+# Everything else that used to live here was Schoolyze's vocabulary. It moved
+# to schoolyze-server/internal/web/locale/ when this became a platform module:
+# a kit that ships one product's words cannot be reused by a second.
+
+[kit.action]
+back = "Back"
+cancel = "Cancel"
+next = "Next"
+previous = "Previous"
+search = "Search"
+
+[kit.auth]
+my_profile = "My profile"
+sign_out = "Sign out"
+
+[kit.common]
+density = "Density"
+language = "Language"
+no_results_help = "Try changing the filters."
+not_recorded = "Not recorded"
+optional = "Optional"
+
+[kit.error]
+busy = "Too many documents are printing right now"
+busy_help = "Nothing is wrong with this document. Wait a moment and print it again."
+forbidden = "You don't have permission to do that"
+forbidden_help = "Ask your institution's administrator if you need access."
+generic = "Something went wrong"
+generic_help = "Please try again. If it keeps happening, contact support."
+not_found = "We couldn't find what you were looking for"
+not_in_plan = "This module isn't part of your plan"
+not_in_plan_help = "Your institution doesn't have this feature enabled. Contact us to add it."
+
+[kit.nav]
+close_menu = "Close menu"
+dashboard = "Dashboard"
+open_menu = "Open menu"
+
+[kit.table]
+showing = "Showing %s–%s of %s"

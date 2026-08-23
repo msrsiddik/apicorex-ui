@@ -1,0 +1,82 @@
+package components
+
+import "github.com/msrsiddik/apicorex-ui/i18n"
+
+// Error pages.
+//
+// Every one says what happened and what to do next, in the user's language.
+// "Something went wrong" on its own leaves an office worker with no move
+// except calling support — which is a cost to the institution and to us.
+
+// ErrorPage is a full-page failure.
+templ ErrorPage(p Page, kind string) {
+	<div class="flex min-h-[60vh] items-center justify-center">
+		<div class="max-w-md text-center">
+			<div class="mx-auto w-fit rounded-full bg-base-200 p-4 text-base-content/40">
+				@Icon(errorIcon(kind), "size-7")
+			</div>
+			<h1 class="mt-5 text-lg font-semibold">{ i18n.T(ctx, errorTitleKey(kind)) }</h1>
+			<p class="mt-2 text-sm text-base-content/60">{ i18n.T(ctx, errorHelpKey(kind)) }</p>
+			<a href={ templ.SafeURL(p.BasePath + "/") } class="btn btn-primary btn-sm mt-6">
+				{ i18n.T(ctx, "kit.action.back") }
+			</a>
+		</div>
+	</div>
+}
+
+// ErrorFragment is the same failure inside an HTMX swap, where replacing the
+// whole page would throw away the surrounding context the user was working in.
+templ ErrorFragment(kind string) {
+	<div class="rounded-lg border border-error/30 bg-error/5 p-6 text-center">
+		<div class="mx-auto w-fit text-error">
+			@Icon(errorIcon(kind), "size-5")
+		</div>
+		<p class="mt-3 text-sm font-medium text-error">{ i18n.T(ctx, errorTitleKey(kind)) }</p>
+		<p class="mt-1 text-xs text-base-content/60">{ i18n.T(ctx, errorHelpKey(kind)) }</p>
+	</div>
+}
+
+func errorIcon(kind string) string {
+	switch kind {
+	case "forbidden":
+		return "alert-triangle"
+	case "not_found":
+		return "search"
+	case "busy":
+		return "clock"
+	case "not_in_plan":
+		return "lock"
+	default:
+		return "alert-circle"
+	}
+}
+
+func errorTitleKey(kind string) string {
+	switch kind {
+	case "forbidden":
+		return "kit.error.forbidden"
+	case "not_found":
+		return "kit.error.not_found"
+	case "busy":
+		return "kit.error.busy"
+	case "not_in_plan":
+		return "kit.error.not_in_plan"
+	default:
+		return "kit.error.generic"
+	}
+}
+
+func errorHelpKey(kind string) string {
+	switch kind {
+	case "forbidden":
+		return "kit.error.forbidden_help"
+	case "not_found":
+		return "kit.common.no_results_help"
+	case "busy":
+		return "kit.error.busy_help"
+	case "not_in_plan":
+		return "kit.error.not_in_plan_help"
+	default:
+		return "kit.error.generic_help"
+	}
+}

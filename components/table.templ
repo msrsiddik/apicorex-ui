@@ -1,0 +1,323 @@
+package components
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/msrsiddik/apicorex-ui/i18n"
+)
+
+// The shared list layout.
+//
+// Every list screen in the app is this: a toolbar of filters, a table, and
+// pagination. Learning one teaches all of them, which matters a great deal for
+// office staff who did not choose this software and were not trained on it.
+//
+// Search, sort, filter and paging all round-trip to the server and HTMX swaps
+// the table body. A class of 2,000 students cannot be sorted in the browser
+// sensibly, and the store already takes limit/offset/q — so a client-side
+// table would be both slower and a second implementation of the same logic.
+
+// TableToolbar is the filter row above a table.
+type TableToolbar struct {
+	// Endpoint is what search and filters post to; it returns the table body.
+	Endpoint string
+	// Target is the element HTMX replaces, usually "#list".
+	Target string
+
+	SearchName        string
+	SearchValue       string
+	SearchPlaceholder string
+
+	Filters []SelectFilter
+	// Action is a primary button, typically "New student".
+	Action templ.Component
+}
+
+// SelectFilter is one dropdown in the toolbar.
+type SelectFilter struct {
+	Name     string
+	Label    string // already translated
+	Value    string
+	Options  []Option
+	AllLabel string // already translated; the "everything" choice
+}
+
+// Option is one choice in a select.
+type Option struct {
+	Value string
+	Label string
+}
+
+// Toolbar renders search and filters.
+//
+// Search is debounced rather than firing per keystroke: a 2,000-row query on
+// every letter would hammer the database and, on a slow connection, return
+// results out of order.
+templ Toolbar(t TableToolbar) {
+	<div class="mb-4 flex flex-wrap items-end gap-3">
+		if t.SearchName != "" {
+			<div class="min-w-56 flex-1">
+				<label class="sr-only" for={ t.SearchName }>
+					{ i18n.T(ctx, "kit.action.search") }
+				</label>
+				<div class="relative flex items-center">
+					<span class="pointer-events-none absolute start-3 z-10 text-base-content/40">
+						@Icon("search", "size-4")
+					</span>
+					<input
+						id={ t.SearchName }
+						type="search"
+						name={ t.SearchName }
+						value={ t.SearchValue }
+						placeholder={ t.SearchPlaceholder }
+						class="input w-full ps-10"
+						hx-get={ t.Endpoint }
+						hx-target={ t.Target }
+						hx-swap="innerHTML"
+						hx-trigger="input changed delay:350ms, search"
+						hx-include="closest .flex"
+						hx-indicator="#page-progress"
+					/>
+				</div>
+			</div>
+		}
+		for _, f := range t.Filters {
+			@selectFilter(f, t)
+		}
+		if t.Action != nil {
+			<div class="ms-auto">
+				@t.Action
+			</div>
+		}
+	</div>
+}
+
+templ selectFilter(f SelectFilter, t TableToolbar) {
+	<div>
+		<label class="mb-1 block text-xs text-base-content/60" for={ f.Name }>
+			{ f.Label }
+		</label>
+		<select
+			id={ f.Name }
+			name={ f.Name }
+			class="select"
+			hx-get={ t.Endpoint }
+			hx-target={ t.Target }
+			hx-swap="innerHTML"
+			hx-include="closest .flex"
+			hx-indicator="#page-progress"
+		>
+			<option value="">{ f.AllLabel }</option>
+			for _, o := range f.Options {
+				if o.Value == f.Value {
+					<option value={ o.Value } selected>{ o.Label }</option>
+				} else {
+					<option value={ o.Value }>{ o.Label }</option>
+				}
+			}
+		</select>
+	</div>
+}
+
+// Column describes one table column.
+type Column struct {
+	Label string // already translated
+	// Sort is the sort key this column offers, or empty when it is not
+	// sortable. Sorting happens on the server.
+	Sort string
+	// Numeric right-aligns the column and uses tabular figures, so a column of
+	// marks or money lines up and can be scanned.
+	Numeric bool
+	// Hide drops the column on narrow screens. Used for detail an office
+	// laptop shows but a phone does not need.
+	Hide bool
+	// Width is a Tailwind width class. Without one the browser gives the widest
+	// text column all the slack, which leaves a roll-number column absurdly
+	// wide and squeezes everything that matters.
+	Width string
+}
+
+// TableProps is everything the table body needs to render its chrome.
+type TableProps struct {
+	Columns []Column
+	// Endpoint, Target and the current query drive sort links.
+	Endpoint  string
+	Target    string
+	SortKey   string
+	SortDesc  bool
+	QueryTail string // extra query parameters to preserve across sorts
+
+	Page PageInfo
+}
+
+// PageInfo is the current slice of a result set.
+type PageInfo struct {
+	Limit  int
+	Offset int
+	Total  int64
+}
+
+// Table wraps a caller-supplied set of rows in the shared chrome.
+templ Table(p TableProps, rows templ.Component) {
+	<div class="overflow-x-auto rounded-lg border border-base-300 bg-base-100">
+		<!-- w-full plus per-column widths: without them the browser hands all
+		     the slack to the widest text column, leaving a roll-number column
+		     absurdly wide and squeezing the name it sits beside. -->
+		<table class="table w-full">
+			<thead>
+				<tr>
+					for _, col := range p.Columns {
+						@columnHeader(col, p)
+					}
+				</tr>
+			</thead>
+			<tbody>
+				@rows
+			</tbody>
+		</table>
+	</div>
+	if p.Page.Total > 0 {
+		@Pagination(p)
+	}
+}
+
+templ columnHeader(col Column, p TableProps) {
+	<th
+		class={ col.Width,
+			templ.KV("text-end", col.Numeric),
+			templ.KV("hidden lg:table-cell", col.Hide) }
+		if col.Sort != "" && col.Sort == p.SortKey {
+			aria-sort={ ariaSort(p.SortDesc) }
+		}
+	>
+		if col.Sort == "" {
+			{ col.Label }
+		} else {
+			<button
+				type="button"
+				class="inline-flex items-center gap-1 hover:text-primary"
+				hx-get={ sortURL(p, col.Sort) }
+				hx-target={ p.Target }
+				hx-swap="innerHTML"
+				hx-indicator="#page-progress"
+			>
+				{ col.Label }
+				if col.Sort == p.SortKey {
+					if p.SortDesc {
+						@Icon("chevron-down", "size-3.5")
+					} else {
+						@Icon("chevron-down", "size-3.5 rotate-180")
+					}
+				}
+			</button>
+		}
+	</th>
+}
+
+func ariaSort(desc bool) string {
+	if desc {
+		return "descending"
+	}
+	return "ascending"
+}
+
+// sortURL toggles direction when the active column is clicked again, and
+// resets to the first page — staying on page 7 of a differently ordered list
+// would land the user somewhere arbitrary.
+func sortURL(p TableProps, key string) string {
+	desc := false
+	if key == p.SortKey && !p.SortDesc {
+		desc = true
+	}
+	url := fmt.Sprintf("%s?sort=%s&desc=%t&offset=0&limit=%d", p.Endpoint, key, desc, p.Page.Limit)
+	if p.QueryTail != "" {
+		url += "&" + p.QueryTail
+	}
+	return url
+}
+
+// Pagination shows the current slice and moves between pages.
+//
+// It states the range and total rather than only offering arrows: "showing
+// ১–৫০ of ১,২৪৭" tells someone whether their filter did what they meant,
+// which a bare "next" does not.
+templ Pagination(p TableProps) {
+	<div class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+		<span class="text-base-content/60">
+			{ i18n.T(ctx, "kit.table.showing",
+				i18n.N(ctx, p.Page.Offset+1),
+				i18n.N(ctx, pageEnd(p.Page)),
+				i18n.N64(ctx, p.Page.Total)) }
+		</span>
+		if p.Page.Total > int64(p.Page.Limit) {
+			<div class="join">
+				@pageButton(p, p.Page.Offset-p.Page.Limit, i18n.T(ctx, "kit.action.previous"),
+					"chevron-left", p.Page.Offset <= 0)
+				@pageButton(p, p.Page.Offset+p.Page.Limit, i18n.T(ctx, "kit.action.next"),
+					"chevron-right", int64(p.Page.Offset+p.Page.Limit) >= p.Page.Total)
+			</div>
+		}
+	</div>
+}
+
+templ pageButton(p TableProps, offset int, label, ic string, disabled bool) {
+	if disabled {
+		<button type="button" class="btn join-item btn-sm" disabled aria-label={ label }>
+			@Icon(ic, "size-4")
+		</button>
+	} else {
+		<button
+			type="button"
+			class="btn join-item btn-sm"
+			aria-label={ label }
+			hx-get={ pageURL(p, offset) }
+			hx-target={ p.Target }
+			hx-swap="innerHTML"
+			hx-indicator="#page-progress"
+		>
+			@Icon(ic, "size-4")
+		</button>
+	}
+}
+
+func pageURL(p TableProps, offset int) string {
+	if offset < 0 {
+		offset = 0
+	}
+	url := p.Endpoint + "?offset=" + strconv.Itoa(offset) + "&limit=" + strconv.Itoa(p.Page.Limit)
+	if p.SortKey != "" {
+		url += "&sort=" + p.SortKey + "&desc=" + strconv.FormatBool(p.SortDesc)
+	}
+	if p.QueryTail != "" {
+		url += "&" + p.QueryTail
+	}
+	return url
+}
+
+// pageEnd is the last row number on this page, capped at the total so the
+// final page does not claim rows that are not there.
+func pageEnd(pi PageInfo) int {
+	end := pi.Offset + pi.Limit
+	if int64(end) > pi.Total {
+		end = int(pi.Total)
+	}
+	return end
+}
+
+// StatusBadge shows a status with both colour and words.
+//
+// Never colour alone: these screens are printed in black and white,
+// photographed, and read by people with colour-vision deficiency. The same
+// rule the tabulation sheet follows.
+templ StatusBadge(kind, label string) {
+	<span
+		class={ "badge badge-sm gap-1",
+			templ.KV("badge-success", kind == "success"),
+			templ.KV("badge-warning", kind == "warning"),
+			templ.KV("badge-error", kind == "error"),
+			templ.KV("badge-ghost", kind == "neutral") }
+	>
+		{ label }
+	</span>
+}

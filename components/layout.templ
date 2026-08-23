@@ -1,0 +1,393 @@
+// Package components holds the admin panel's templ components.
+//
+// Every user-facing string goes through i18n.T — a bare Bangla or English
+// literal in markup is a bug. Components are built and checked in Bangla
+// first: Bangla runs ~15% wider than English, so a layout that fits Bangla
+// always fits English, never the reverse.
+package components
+
+import (
+	"context"
+
+	"github.com/msrsiddik/apicorex-ui/i18n"
+)
+
+// Page is everything the shell needs that is not the page body itself.
+type Page struct {
+	Title    string // already translated
+	BasePath string
+	Locale   i18n.Locale
+	Density  string // "comfortable" | "compact"
+	CSRF     string
+	User     UserInfo
+	Nav      []NavItem
+	Active   string // NavItem.Key of the current section
+	// AppName is the product this shell is framing, shown in the title. Empty
+	// falls back to the kit's own catalogue key, which is how it behaved when
+	// only one product used it.
+	//
+	// A field rather than a translation key because two plugins in one suite
+	// have two names and share one catalogue: "app.name" could only ever mean
+	// one of them, and it meant Schoolyze.
+	AppName string
+	// Theme selects the design tokens, as data-theme on <html>. Empty keeps
+	// "schoolyze", which is what every existing screen renders with.
+	Theme string
+
+	// AssetVersion is appended to the CSS/JS URLs as ?v=, so a browser that
+	// cached last deploy's app.build.css fetches the new one instead of
+	// silently keeping the old — see routes.go's assetVersion for why this
+	// matters given those URLs are served with a one-year immutable cache.
+	AssetVersion string
+
+	// Toast is a transient outcome message shown once on page load, then
+	// auto-dismissed — "saved", "deleted", "still in use". Already translated.
+	Toast string
+	// ToastKind is "success", "error", "warning" or "info". Ignored if Toast is "".
+	ToastKind string
+}
+
+// UserInfo is who is signed in, for the header.
+type UserInfo struct {
+	Name            string
+	Role            string // already translated
+	InstitutionName string
+	// BranchName is the current campus, shown as plain text when there is
+	// nothing to switch between.
+	BranchName string
+	// Branches lists every campus of the tenant, populated only when there
+	// are more than one — that's what turns BranchName into a dropdown
+	// instead of static text. See app.go's branchesFor.
+	Branches []BranchOption
+}
+
+// BranchOption is one campus in the header's switcher.
+type BranchOption struct {
+	ID      string
+	Name    string
+	Current bool
+}
+
+// NavItem is one sidebar entry. Only items the user may actually open are
+// passed in — hiding what someone cannot use beats showing it disabled.
+type NavItem struct {
+	Key   string
+	Label string // already translated
+	Icon  string // Lucide icon name
+	Href  string
+}
+
+// Shell is the application frame: sidebar, header, and the page body.
+templ Shell(p Page, body templ.Component) {
+	<!DOCTYPE html>
+	<html
+		lang={ string(p.Locale) }
+		data-density={ p.Density }
+		data-theme={ p.ThemeOr() }
+	>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ p.Title } · { p.AppNameOr(ctx) }</title>
+			<link rel="stylesheet" href={ p.BasePath + "/static/css/app.build.css?v=" + p.AssetVersion }/>
+			<script src={ p.BasePath + "/static/js/htmx.min.js?v=" + p.AssetVersion } defer></script>
+			<script src={ p.BasePath + "/static/js/alpine.min.js?v=" + p.AssetVersion } defer></script>
+		</head>
+		<!-- hx-headers puts the CSRF token on every non-GET request, so a form
+		     that forgets it fails closed rather than silently working.
+		     hx-indicator drives the top progress bar: without it a slow swap
+		     looks like a frozen page. -->
+		<body
+			class="min-h-screen bg-base-200 text-base-content"
+			hx-headers={ `{"X-CSRF-Token": "` + p.CSRF + `"}` }
+			hx-indicator="#page-progress"
+		>
+			@progressBar()
+			<!-- navOpen is shared by the header's hamburger button and the sidebar
+			     it opens — below lg the sidebar is an off-canvas drawer, not a
+			     permanent column, so something has to hold whether it's out. -->
+			<div class="flex" x-data="{ navOpen: false }">
+				@sidebar(p)
+				<div class="flex min-h-screen min-w-0 flex-1 flex-col">
+					@header(p)
+					<main id="main" class="flex-1 p-6">
+						@body
+					</main>
+				</div>
+			</div>
+			@toastHost(p)
+		</body>
+	</html>
+}
+
+// progressBar is a thin bar at the top of the page during any HTMX request.
+// Unobtrusive, but it answers "did my click register?" — which is what makes
+// someone click "collect payment" a second time.
+templ progressBar() {
+	<div
+		id="page-progress"
+		class="htmx-indicator fixed inset-x-0 top-0 z-50 h-0.5 bg-primary"
+		role="status"
+		aria-live="polite"
+	></div>
+}
+
+templ sidebar(p Page) {
+	<!-- Below lg the sidebar is an off-canvas drawer: this backdrop is what
+	     closing-by-tapping-outside and the visual dimming are built on. It
+	     never renders on lg — there the sidebar is just a permanent column,
+	     nothing to dim behind. -->
+	<div
+		x-show="navOpen"
+		x-transition.opacity
+		x-cloak
+		class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+		@click="navOpen = false"
+	></div>
+
+	<!-- -translate-x-full is both the pre-Alpine default and the closed
+	     state Alpine toggles back to: written statically here (not only in
+	     :class below) so the drawer starts off-canvas even for the instant
+	     before Alpine hydrates, rather than flashing open first. -->
+	<aside
+		:class="navOpen ? 'translate-x-0' : '-translate-x-full'"
+		class="fixed inset-y-0 left-0 z-50 flex h-screen w-60 shrink-0 -translate-x-full flex-col border-r border-base-300 bg-base-100 transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:z-auto lg:translate-x-0 lg:transition-none"
+	>
+		<div class="flex h-16 items-center justify-between gap-2 border-b border-base-300 px-5">
+			<span class="text-lg font-bold text-primary">{ p.AppNameOr(ctx) }</span>
+			<button
+				type="button"
+				class="btn btn-ghost btn-sm btn-square lg:hidden"
+				aria-label={ i18n.T(ctx, "kit.nav.close_menu") }
+				@click="navOpen = false"
+			>
+				@Icon("x", "size-4")
+			</button>
+		</div>
+		<nav class="flex flex-col gap-0.5 overflow-y-auto p-3" aria-label={ i18n.T(ctx, "kit.nav.dashboard") }>
+			for _, item := range p.Nav {
+				@navLink(item, item.Key == p.Active)
+			}
+		</nav>
+	</aside>
+}
+
+templ navLink(item NavItem, active bool) {
+	<a
+		href={ templ.SafeURL(item.Href) }
+		class={ "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+			templ.KV("bg-primary text-primary-content font-medium", active),
+			templ.KV("text-base-content/75 hover:bg-base-200 hover:text-base-content", !active) }
+		if active {
+			aria-current="page"
+		}
+	>
+		@Icon(item.Icon, "size-4 shrink-0")
+		<span class="truncate">{ item.Label }</span>
+	</a>
+}
+
+templ header(p Page) {
+	<!-- The institution name stays when printed — it is the letterhead, and a
+	     report that leaves the office without it cannot be identified. The
+	     controls beside it are screen furniture and are dropped. -->
+	<header class="sticky top-0 z-40 flex h-16 items-center justify-between gap-4 border-b border-base-300 bg-base-100 px-4 sm:px-6 print:static print:h-auto print:px-0 print:pb-2">
+		<div class="flex min-w-0 items-center gap-2">
+			<button
+				type="button"
+				class="btn btn-ghost btn-sm btn-square shrink-0 lg:hidden print:hidden"
+				aria-label={ i18n.T(ctx, "kit.nav.open_menu") }
+				@click="navOpen = true"
+			>
+				@Icon("menu", "size-4")
+			</button>
+			<div class="min-w-0">
+				<div class="truncate text-sm font-medium print:text-base">{ p.User.InstitutionName }</div>
+				if len(p.User.Branches) > 1 {
+					@branchSwitcher(p)
+				} else if p.User.BranchName != "" {
+					<div class="truncate text-xs text-base-content/60">{ p.User.BranchName }</div>
+				}
+			</div>
+		</div>
+		<div class="flex items-center gap-2 print:hidden">
+			@LanguageToggle(p.BasePath, p.Locale)
+			@DensityToggle(p.BasePath, p.Density)
+			@userMenu(p)
+		</div>
+	</header>
+}
+
+// branchSwitcher lets someone move between an institution's campuses. Only
+// rendered when there is more than one to choose from — see UserInfo.Branches.
+//
+// Each option posts its own tiny form rather than one form with a submit-on-
+// change select: switching campus reloads everything the page shows, so it
+// needs the same full-navigation POST the logout button already uses in
+// userMenu, not an HTMX swap of just the header.
+templ branchSwitcher(p Page) {
+	<div class="dropdown" x-data="{ open: false }">
+		<button
+			type="button"
+			class="-ml-1 flex items-center gap-1 truncate rounded px-1 text-xs text-base-content/60 hover:text-base-content"
+			@click="open = !open"
+			:aria-expanded="open"
+		>
+			<span class="truncate">{ p.User.BranchName }</span>
+			@Icon("chevron-down", "size-3")
+		</button>
+		<div
+			x-show="open"
+			x-transition
+			@click.outside="open = false"
+			x-cloak
+			class="dropdown-content z-50 mt-1 w-56 rounded-lg border border-base-300 bg-base-100 p-2 shadow-lg"
+		>
+			for _, b := range p.User.Branches {
+				<form method="post" action={ templ.SafeURL(p.BasePath + "/switch-branch") }>
+					<input type="hidden" name="_csrf" value={ p.CSRF }/>
+					<input type="hidden" name="branch_id" value={ b.ID }/>
+					<button
+						type="submit"
+						class={ "flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-base-200",
+							templ.KV("font-medium text-primary", b.Current) }
+						disabled?={ b.Current }
+					>
+						if b.Current {
+							@Icon("check", "size-4")
+						} else {
+							<span class="size-4"></span>
+						}
+						<span class="truncate">{ b.Name }</span>
+					</button>
+				</form>
+			}
+		</div>
+	</div>
+}
+
+// LanguageToggle switches between Bangla and English.
+//
+// Each language is written in its own script: someone looking for Bangla
+// should see "বাংলা", not "Bangla". The switch is a server round-trip because
+// the strings live on the server — HTMX swaps the whole body, so it feels
+// instant without a reload.
+templ LanguageToggle(basePath string, current i18n.Locale) {
+	<div class="join" role="group" aria-label={ i18n.T(ctx, "kit.common.language") }>
+		for _, l := range i18n.Supported {
+			<button
+				type="button"
+				class={ "btn join-item btn-xs",
+					templ.KV("btn-primary", l == current),
+					templ.KV("btn-ghost", l != current) }
+				hx-post={ basePath + "/preferences/locale?value=" + string(l) }
+				hx-target="body"
+				hx-swap="outerHTML"
+				if l == current {
+					aria-pressed="true"
+				} else {
+					aria-pressed="false"
+				}
+			>
+				{ l.Name() }
+			</button>
+		}
+	</div>
+}
+
+// DensityToggle trades whitespace for rows on screen.
+templ DensityToggle(basePath, current string) {
+	<button
+		type="button"
+		class="btn btn-ghost btn-xs"
+		title={ i18n.T(ctx, "kit.common.density") }
+		hx-post={ basePath + "/preferences/density" }
+		hx-target="body"
+		hx-swap="outerHTML"
+	>
+		if current == "compact" {
+			@Icon("rows-3", "size-4")
+		} else {
+			@Icon("rows-2", "size-4")
+		}
+	</button>
+}
+
+templ userMenu(p Page) {
+	<div class="dropdown dropdown-end" x-data="{ open: false }">
+		<button
+			type="button"
+			class="btn btn-ghost btn-sm gap-2"
+			@click="open = !open"
+			:aria-expanded="open"
+		>
+			<span class="hidden text-sm sm:inline">{ p.User.Name }</span>
+			@Icon("chevron-down", "size-4")
+		</button>
+		<div
+			x-show="open"
+			x-transition
+			@click.outside="open = false"
+			x-cloak
+			class="dropdown-content z-50 mt-1 w-56 rounded-lg border border-base-300 bg-base-100 p-2 shadow-lg"
+		>
+			<div class="border-b border-base-300 px-3 py-2">
+				<div class="truncate text-sm font-medium">{ p.User.Name }</div>
+				<div class="truncate text-xs text-base-content/60">{ p.User.Role }</div>
+			</div>
+			<a
+				href={ templ.SafeURL(p.BasePath + "/me") }
+				class="mt-1 flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-base-200"
+			>
+				@Icon("user", "size-4")
+				{ i18n.T(ctx, "kit.auth.my_profile") }
+			</a>
+			<form method="post" action={ templ.SafeURL(p.BasePath + "/logout") }>
+				<input type="hidden" name="_csrf" value={ p.CSRF }/>
+				<button type="submit" class="mt-1 flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-base-200">
+					@Icon("log-out", "size-4")
+					{ i18n.T(ctx, "kit.auth.sign_out") }
+				</button>
+			</form>
+		</div>
+	</div>
+}
+
+// toastHost is where transient outcome messages land. Outcomes get a toast;
+// validation errors go inline next to the field they belong to — a toast
+// listing five field errors is not useful.
+//
+// p.Toast is rendered on first load when a handler redirected here after an
+// action; further toasts (if any page starts pushing them via HTMX
+// out-of-band swaps) land in the same #toasts container.
+templ toastHost(p Page) {
+	<div
+		id="toasts"
+		class="toast toast-end z-50"
+		role="status"
+		aria-live="polite"
+		hx-swap-oob="beforeend"
+	>
+		if p.Toast != "" {
+			@Toast(p.ToastKind, p.Toast)
+		}
+	</div>
+}
+
+// ThemeOr is the page's theme, defaulting to the one every existing screen
+// already renders with.
+func (p Page) ThemeOr() string {
+	if p.Theme != "" {
+		return p.Theme
+	}
+	return "schoolyze"
+}
+
+// AppNameOr is the product name shown in the title bar and beside the sidebar.
+//
+// There is no fallback: the kit has no name of its own, and it used to borrow
+// one — i18n.T("app.name"), which resolved to whichever product had registered
+// that key. With one consumer that was invisible; with two it meant the ledger's
+// pages were branded "স্কুলাইজ". A product that sets nothing gets nothing, which
+// is a missing word rather than the wrong one.
+func (p Page) AppNameOr(ctx context.Context) string { return p.AppName }

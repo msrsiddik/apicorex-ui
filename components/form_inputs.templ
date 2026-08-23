@@ -1,0 +1,209 @@
+package components
+
+import "github.com/msrsiddik/apicorex-ui/i18n"
+
+// Additional form inputs, sharing FieldProps' label/help/error treatment so
+// every control in the app looks and fails the same way.
+
+// SelectProps describes a dropdown.
+type SelectProps struct {
+	Name        string
+	Label       string // already translated
+	Value       string
+	Options     []Option
+	Placeholder string // the empty choice; omitted when the field is required
+	Help        string
+	Error       string
+	Required    bool
+	Attrs       templ.Attributes
+}
+
+templ SelectField(p SelectProps) {
+	<div class="space-y-1.5">
+		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+			<span class="text-sm font-medium">
+				{ p.Label }
+				if p.Required {
+					<span class="text-error" aria-hidden="true">*</span>
+				}
+			</span>
+		</label>
+		<select
+			id={ p.Name }
+			name={ p.Name }
+			class={ "select w-full", templ.KV("select-error", p.Error != "") }
+			if p.Required {
+				required
+			}
+			if p.Error != "" {
+				aria-invalid="true"
+				aria-describedby={ p.Name + "-error" }
+			}
+			{ p.Attrs... }
+		>
+			if p.Placeholder != "" {
+				<option value="">{ p.Placeholder }</option>
+			}
+			for _, o := range p.Options {
+				if o.Value == p.Value {
+					<option value={ o.Value } selected>{ o.Label }</option>
+				} else {
+					<option value={ o.Value }>{ o.Label }</option>
+				}
+			}
+		</select>
+		@fieldFooter(p.Name, p.Help, p.Error)
+	</div>
+}
+
+// DateField is a calendar date.
+//
+// A native <input type="date"> rather than a JavaScript picker: it works
+// without scripting, gets the platform's own keyboard and locale handling, and
+// office staff on Windows already know it. The value is always ISO with Latin
+// digits regardless of interface language — that is what the element requires
+// — while the value *displayed* elsewhere follows the locale.
+//
+// When the submitted value failed to parse, the field falls back to a plain
+// text input. A date input silently discards anything it cannot understand, so
+// re-rendering one after a validation failure would blank the field and leave
+// the user staring at "check this date" above an empty box, with no idea what
+// they had typed.
+templ DateField(p FieldProps) {
+	<div class="space-y-1.5">
+		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+			<span class="text-sm font-medium">
+				{ p.Label }
+				if p.Required {
+					<span class="text-error" aria-hidden="true">*</span>
+				}
+			</span>
+			if p.ShowOptional && !p.Required {
+				<span class="text-xs text-base-content/40">{ i18n.T(ctx, "kit.common.optional") }</span>
+			}
+		</label>
+		<input
+			id={ p.Name }
+			name={ p.Name }
+			type={ dateInputType(p) }
+			value={ p.Value }
+			class={ "input w-full", templ.KV("input-error", p.Error != "") }
+			if p.Required {
+				required
+			}
+			if p.Error != "" {
+				aria-invalid="true"
+				aria-describedby={ p.Name + "-error" }
+				placeholder="YYYY-MM-DD"
+			}
+			{ p.Attrs... }
+		/>
+		@fieldFooter(p.Name, p.Help, p.Error)
+	</div>
+}
+
+// dateInputType keeps the native picker for good input and degrades to text for
+// bad input, so the user can see and correct what they actually typed.
+func dateInputType(p FieldProps) string {
+	if p.Error != "" {
+		return "text"
+	}
+	return "date"
+}
+
+// TextareaField is multi-line text — an address, a note.
+templ TextareaField(p FieldProps) {
+	<div class="space-y-1.5">
+		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+			<span class="text-sm font-medium">
+				{ p.Label }
+				if p.Required {
+					<span class="text-error" aria-hidden="true">*</span>
+				}
+			</span>
+			if p.ShowOptional && !p.Required {
+				<span class="text-xs text-base-content/40">{ i18n.T(ctx, "kit.common.optional") }</span>
+			}
+		</label>
+		<textarea
+			id={ p.Name }
+			name={ p.Name }
+			rows="2"
+			class={ "textarea w-full", templ.KV("textarea-error", p.Error != "") }
+			if p.Required {
+				required
+			}
+			if p.Error != "" {
+				aria-invalid="true"
+				aria-describedby={ p.Name + "-error" }
+			}
+			{ p.Attrs... }
+		>{ p.Value }</textarea>
+		@fieldFooter(p.Name, p.Help, p.Error)
+	</div>
+}
+
+// fieldFooter renders whichever of help or error applies, so all three inputs
+// treat them identically.
+templ fieldFooter(name, help, errMsg string) {
+	if errMsg != "" {
+		<p id={ name + "-error" } class="flex items-center gap-1 text-xs text-error">
+			@Icon("alert-circle", "size-3.5 shrink-0")
+			{ errMsg }
+		</p>
+	} else if help != "" {
+		<p class="text-xs text-base-content/50">{ help }</p>
+	}
+}
+
+// FormSection groups related fields under a heading.
+//
+// A long admission form is far easier to work through in labelled groups than
+// as one undifferentiated column — and the groups are where someone's eye
+// returns when they come back to a half-finished form.
+templ FormSection(heading string, fields templ.Component) {
+	<section class="border-t border-base-300 pt-5 first:border-0 first:pt-0">
+		<h2 class="mb-4 text-sm font-semibold text-base-content/70">{ heading }</h2>
+		<div class="grid gap-4 sm:grid-cols-2">
+			@fields
+		</div>
+	</section>
+}
+
+// FormActions is the save/cancel row.
+//
+// Cancel is a link, not a button: it navigates away, and making it look like a
+// second submit invites the wrong click on a form someone just spent five
+// minutes filling in.
+templ FormActions(saveLabel, cancelHref string) {
+	<div class="flex items-center justify-end gap-3 border-t border-base-300 pt-5">
+		<a href={ templ.SafeURL(cancelHref) } class="btn btn-ghost btn-sm">
+			{ i18n.T(ctx, "kit.action.cancel") }
+		</a>
+		<button type="submit" class="btn btn-primary btn-sm gap-1.5">
+			@Icon("save", "size-4")
+			<span class="htmx-indicator loading loading-spinner loading-xs"></span>
+			{ saveLabel }
+		</button>
+	</div>
+}
+
+// DetailRow is one label/value pair on a read-only profile.
+//
+// An empty value reads as "kit.common.not_recorded" — deliberately generic. It
+// used to say "student.profile.not_recorded", which is a school's vocabulary
+// sitting inside a component that knows nothing about students and is used by a
+// ledger. The kit having a domain word in it was harmless while one product used
+// it and is exactly what the layer model forbids.
+templ DetailRow(label, value string) {
+	<div>
+		<dt class="text-xs text-base-content/50">{ label }</dt>
+		<dd class="mt-0.5 text-sm">
+			if value != "" {
+				{ value }
+			} else {
+				<span class="text-base-content/30">{ i18n.T(ctx, "kit.common.not_recorded") }</span>
+			}
+		</dd>
+	</div>
+}

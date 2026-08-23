@@ -1,0 +1,267 @@
+package components
+
+import "github.com/msrsiddik/apicorex-ui/i18n"
+
+// Shared form and feedback components.
+//
+// Two rules these encode, both from docs/web-plan.md §6:
+//
+//   - A form that fails validation comes back with the user's input intact and
+//     the message beside the field that caused it. Retyping an admission form
+//     because one field was wrong is how software gets abandoned.
+//   - Outcomes get a toast; validation errors go inline. A toast listing five
+//     field errors is not useful to anyone.
+
+// FieldProps describes one form input.
+type FieldProps struct {
+	Name  string
+	Label string // already translated
+	Value string
+	Type  string // defaults to "text"
+	Help  string // already translated
+	Error string // already translated; renders instead of Help when set
+	// Required marks the field visually and for assistive technology. The
+	// server validates regardless — a browser check is a convenience, never a
+	// control.
+	Required bool
+	// ShowOptional labels a field "optional". Off by default: most fields in
+	// this app are required, so tagging every one of them the other way turns
+	// the marker into noise. Set it only on forms where the distinction
+	// actually helps — a long admission form with genuinely optional fields.
+	ShowOptional bool
+	Attrs        templ.Attributes
+}
+
+// Field renders a labelled input with its help or error text.
+templ Field(p FieldProps) {
+	<div class="space-y-1.5">
+		<label class="flex items-baseline justify-between gap-2" for={ p.Name }>
+			<span class="text-sm font-medium">
+				{ p.Label }
+				if p.Required {
+					<span class="text-error" aria-hidden="true">*</span>
+				}
+			</span>
+			if p.ShowOptional && !p.Required {
+				<span class="text-xs text-base-content/40">
+					{ i18n.T(ctx, "kit.common.optional") }
+				</span>
+			}
+		</label>
+		<input
+			id={ p.Name }
+			name={ p.Name }
+			type={ inputType(p.Type) }
+			value={ p.Value }
+			class={ "input w-full",
+				templ.KV("input-error", p.Error != "") }
+			if p.Required {
+				required
+			}
+			if p.Error != "" {
+				aria-invalid="true"
+				aria-describedby={ p.Name + "-error" }
+			}
+			{ p.Attrs... }
+		/>
+		if p.Error != "" {
+			<p id={ p.Name + "-error" } class="mt-1 flex items-center gap-1 text-xs text-error">
+				@Icon("alert-circle", "size-3.5 shrink-0")
+				{ p.Error }
+			</p>
+		} else if p.Help != "" {
+			<p class="text-xs text-base-content/50">{ p.Help }</p>
+		}
+	</div>
+}
+
+func inputType(t string) string {
+	if t == "" {
+		return "text"
+	}
+	return t
+}
+
+// Alert is an inline message block.
+//
+// kind is "error", "warning", "success" or "info". Each pairs an icon with the
+// text: these screens get printed and photographed, and colour alone excludes
+// anyone with a colour-vision deficiency.
+templ Alert(kind, message, help string) {
+	<div
+		class={ "mt-4 flex gap-3 rounded-lg border p-3 text-sm",
+			templ.KV("border-error/30 bg-error/5 text-error", kind == "error"),
+			templ.KV("border-warning/30 bg-warning/5 text-warning", kind == "warning"),
+			templ.KV("border-success/30 bg-success/5 text-success", kind == "success"),
+			templ.KV("border-info/30 bg-info/5 text-info", kind == "info") }
+		role={ alertRole(kind) }
+	>
+		@Icon(alertIcon(kind), "size-4 shrink-0 mt-0.5")
+		<div class="min-w-0">
+			<p class="font-medium">{ message }</p>
+			if help != "" {
+				<p class="mt-0.5 opacity-80">{ help }</p>
+			}
+		</div>
+	</div>
+}
+
+func alertIcon(kind string) string {
+	switch kind {
+	case "error":
+		return "alert-circle"
+	case "warning":
+		return "alert-triangle"
+	case "success":
+		return "check-circle"
+	default:
+		return "info"
+	}
+}
+
+// alertRole marks errors as assertive so a screen reader announces them
+// immediately; anything else can wait for a natural pause.
+func alertRole(kind string) string {
+	if kind == "error" {
+		return "alert"
+	}
+	return "status"
+}
+
+// Toast is a transient outcome message, swapped into the toast host.
+//
+// Only for outcomes — "saved", "receipt printed". Validation belongs beside the
+// field it concerns.
+templ Toast(kind, message string) {
+	<div
+		class={ "alert shadow-lg",
+			templ.KV("alert-success", kind == "success"),
+			templ.KV("alert-error", kind == "error"),
+			templ.KV("alert-warning", kind == "warning"),
+			templ.KV("alert-info", kind == "info") }
+		x-data="{ show: true }"
+		x-show="show"
+		x-init="setTimeout(() => show = false, 4000)"
+		x-transition
+		role={ alertRole(kind) }
+	>
+		@Icon(alertIcon(kind), "size-4 shrink-0")
+		<span>{ message }</span>
+	</div>
+}
+
+// HXToastFragment is an HTMX response: the swapped fragment plus an
+// out-of-band toast, so an action's outcome shows as a corner notification
+// instead of a "?notice=" query param on the next page.
+//
+// The wrapper's id matches the persistent #toasts container the shell always
+// renders (see layout.templ's toastHost) — htmx matches by id and, because
+// this one carries hx-swap-oob="beforeend", appends the toast inside it
+// rather than replacing it.
+templ HXToastFragment(target templ.Component, kind, message string) {
+	@target
+	if message != "" {
+		<div id="toasts" hx-swap-oob="beforeend">
+			@Toast(kind, message)
+		</div>
+	}
+}
+
+// EmptyState is what a list shows when it has nothing to show.
+//
+// Never a bare "no results": it says what would go here and offers the action
+// that creates the first one, so an empty screen is a starting point rather
+// than a dead end.
+templ EmptyState(title, help string, action templ.Component) {
+	<div class="flex flex-col items-center justify-center rounded-lg border border-dashed border-base-300 px-6 py-16 text-center">
+		<div class="rounded-full bg-base-200 p-3 text-base-content/40">
+			@Icon("inbox", "size-6")
+		</div>
+		<p class="mt-4 font-medium">{ title }</p>
+		if help != "" {
+			<p class="mt-1 max-w-sm text-sm text-base-content/60">{ help }</p>
+		}
+		if action != nil {
+			<div class="mt-4">
+				@action
+			</div>
+		}
+	</div>
+}
+
+// PageHeader is the title row every screen starts with: what this page is, and
+// its primary action. Keeping it one component is what makes the app feel like
+// one product rather than a collection of screens.
+templ PageHeader(title, subtitle string, actions templ.Component) {
+	<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+		<div class="min-w-0">
+			<h1 class="text-xl font-semibold">{ title }</h1>
+			if subtitle != "" {
+				<p class="mt-0.5 text-sm text-base-content/60">{ subtitle }</p>
+			}
+		</div>
+		if actions != nil {
+			<div class="flex shrink-0 items-center gap-2">
+				@actions
+			</div>
+		}
+	</div>
+}
+
+// ConfirmProps configures a styled confirmation dialog in front of a form
+// submission — used instead of ConfirmButton when the action is a plain
+// <form method="post"> rather than an HTMX request.
+type ConfirmProps struct {
+	FormID       string // id of the <form> the dialog's confirm button submits
+	TriggerLabel string // already translated
+	TriggerClass string
+	Title        string // already translated
+	Message      string // already translated — what will happen, named specifically
+	ConfirmLabel string // already translated
+	ConfirmClass string // e.g. "btn btn-error" for destructive, "btn btn-primary" otherwise
+}
+
+// ConfirmSubmit is a button that opens a styled dialog before submitting a
+// form, in place of the browser's native confirm().
+//
+// The trigger does not submit anything itself — it only opens the dialog
+// immediately after it in the DOM. The dialog's own button carries the real
+// submit, associated with the target form via the HTML "form" attribute
+// (valid outside the form's own subtree, which matters here because the
+// dialog is not nested inside the form it submits).
+templ ConfirmSubmit(p ConfirmProps) {
+	<button type="button" class={ p.TriggerClass } onclick="this.nextElementSibling.showModal()">
+		{ p.TriggerLabel }
+	</button>
+	<dialog class="modal">
+		<div class="modal-box text-start">
+			<h3 class="text-lg font-bold">{ p.Title }</h3>
+			<p class="py-4">{ p.Message }</p>
+			<div class="modal-action">
+				<button type="button" class="btn" onclick="this.closest('dialog').close()">
+					{ i18n.T(ctx, "kit.action.cancel") }
+				</button>
+				<button form={ p.FormID } type="submit" class={ p.ConfirmClass }>
+					{ p.ConfirmLabel }
+				</button>
+			</div>
+		</div>
+		<form method="dialog" class="modal-backdrop">
+			<button>close</button>
+		</form>
+	</dialog>
+}
+
+// ConfirmButton triggers a destructive action behind a confirmation that says
+// exactly what will happen — "Delete 3 students?" rather than "Are you sure?".
+templ ConfirmButton(label, question, endpoint, target string) {
+	<button
+		type="button"
+		class="btn btn-error btn-sm"
+		hx-delete={ endpoint }
+		hx-target={ target }
+		hx-confirm={ question }
+	>
+		{ label }
+	</button>
+}
