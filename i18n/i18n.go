@@ -15,6 +15,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -266,4 +267,26 @@ func ParseAcceptLanguage(header string) Locale {
 		}
 	}
 	return ""
+}
+
+// FromRequest picks the locale for one HTTP request: an explicit ?lang, then a
+// remembered cookie, then Accept-Language, then the default.
+//
+// The last step is the point. ParseAcceptLanguage returns "" when the header
+// names no language we serve, leaving the default to the caller — and an empty
+// locale is not harmlessly neutral: it renders <html lang="">, IsBangla is
+// false, and a Bangla interface shows every name in English. Each consumer was
+// writing this chain by hand, and the second one to write it got exactly that
+// wrong.
+func FromRequest(r *http.Request) Locale {
+	if v := r.URL.Query().Get("lang"); Valid(v) {
+		return Locale(v)
+	}
+	if c, err := r.Cookie("lang"); err == nil && Valid(c.Value) {
+		return Locale(c.Value)
+	}
+	if l := ParseAcceptLanguage(r.Header.Get("Accept-Language")); l != "" {
+		return l
+	}
+	return Default
 }
