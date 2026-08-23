@@ -33,6 +33,14 @@ type Page struct {
 	// Theme selects the design tokens, as data-theme on <html>. Empty keeps
 	// "schoolyze", which is what every existing screen renders with.
 	Theme string
+	// LogoutHref is where the sign-out button posts. Empty falls back to this
+	// panel's own BasePath + "/logout".
+	//
+	// It is a field because signing out belongs with signing in, and that is one
+	// place for the whole suite rather than one per product. A panel that never
+	// built a logout route — and a second panel would not — had a sign-out
+	// button that 404ed.
+	LogoutHref string
 
 	// AssetVersion is appended to the CSS/JS URLs as ?v=, so a browser that
 	// cached last deploy's app.build.css fetches the new one instead of
@@ -342,7 +350,7 @@ templ userMenu(p Page) {
 				@Icon("user", "size-4")
 				{ i18n.T(ctx, "kit.auth.my_profile") }
 			</a>
-			<form method="post" action={ templ.SafeURL(p.BasePath + "/logout") }>
+			<form method="post" action={ templ.SafeURL(p.LogoutHrefOr()) }>
 				<input type="hidden" name="_csrf" value={ p.CSRF }/>
 				<button type="submit" class="mt-1 flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-base-200">
 					@Icon("log-out", "size-4")
@@ -391,3 +399,11 @@ func (p Page) ThemeOr() string {
 // pages were branded "স্কুলাইজ". A product that sets nothing gets nothing, which
 // is a missing word rather than the wrong one.
 func (p Page) AppNameOr(ctx context.Context) string { return p.AppName }
+
+// LogoutHrefOr is where sign-out posts, defaulting to this panel's own route.
+func (p Page) LogoutHrefOr() string {
+	if p.LogoutHref != "" {
+		return p.LogoutHref
+	}
+	return p.BasePath + "/logout"
+}
