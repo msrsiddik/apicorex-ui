@@ -14,6 +14,14 @@ previous = "Previous"
 search = "Search"
 
 [kit.auth]
+choose_institution = "Choose an institution"
+choose_institution_help = "This email belongs to more than one institution"
+email = "Email"
+login_subtitle = "Access your institution's account"
+login_title = "Sign in"
+password = "Password"
+sign_in = "Sign in"
+sign_in_google = "Sign in with Google"
 my_profile = "My profile"
 sign_out = "Sign out"
 
@@ -42,3 +50,6 @@ open_menu = "Open menu"
 
 [kit.table]
 showing = "Showing %s–%s of %s"
+
+[kit.app]
+tagline = "Institution management"

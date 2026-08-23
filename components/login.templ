@@ -1,0 +1,200 @@
+package components
+
+import "github.com/msrsiddik/apicorex-ui/i18n"
+
+// LoginPage is the sign-in screen's state.
+type LoginPage struct {
+	BasePath string
+	Locale   i18n.Locale
+	// AppName and Theme let a deployment brand the one screen every user of the
+	// suite sees before they are anybody. Empty AppName shows the kit's own
+	// wordless header rather than another product's name.
+	AppName string
+	Theme   string
+	CSRF     string
+	// AssetVersion busts the browser cache on the CSS/JS URLs — see
+	// Page.AssetVersion's comment for why this matters.
+	AssetVersion string
+
+	// Email is echoed back after a failed attempt.
+	Email string
+
+	// Error is an already-translated message, or empty.
+	Error string
+
+	// Tenants is non-empty when the email belongs to several institutions and
+	// the user must pick one.
+	Tenants []TenantChoice
+
+	// GoogleEnabled reflects the deployment's configuration, fetched from
+	// Identity's /auth/config — the client never hardcodes which sign-in
+	// methods exist.
+	GoogleEnabled bool
+	PasswordLogin bool
+}
+
+// TenantChoice is one institution in the chooser.
+type TenantChoice struct {
+	Slug string
+	Name string
+}
+
+// Login renders the sign-in page.
+//
+// A standalone document rather than the Shell: there is no navigation, no user
+// and no branch to show until someone has signed in.
+//
+// It lives in the kit because the suite has one login, not one per product. It
+// used to live in Schoolyze, which meant a deployment running only the ledger
+// had no way for anyone to sign in at all.
+templ Login(p LoginPage) {
+	<!DOCTYPE html>
+	<html lang={ string(p.Locale) } data-theme={ p.ThemeOr() }>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ i18n.T(ctx, "kit.auth.login_title") } · { p.AppName }</title>
+			<link rel="stylesheet" href={ p.BasePath + "/static/css/app.build.css?v=" + p.AssetVersion }/>
+			<script src={ p.BasePath + "/static/js/htmx.min.js?v=" + p.AssetVersion } defer></script>
+			<script src={ p.BasePath + "/static/js/alpine.min.js?v=" + p.AssetVersion } defer></script>
+		</head>
+		<body class="grid min-h-screen place-items-center bg-base-200 p-4">
+			<main class="w-full max-w-sm">
+				<div class="mb-6 text-center">
+					<h1 class="text-2xl font-bold text-primary">{ p.AppName }</h1>
+					<p class="mt-1 text-sm text-base-content/60">{ i18n.T(ctx, "kit.app.tagline") }</p>
+				</div>
+
+				<div class="rounded-xl border border-base-300 bg-base-100 p-6 shadow-sm">
+					if len(p.Tenants) > 0 {
+						@tenantChooser(p)
+					} else {
+						@loginForm(p)
+					}
+				</div>
+
+				<div class="mt-4 flex justify-center">
+					@LanguageToggle(p.BasePath, p.Locale)
+				</div>
+			</main>
+		</body>
+	</html>
+}
+
+templ loginForm(p LoginPage) {
+	<h2 class="text-lg font-semibold">{ i18n.T(ctx, "kit.auth.login_title") }</h2>
+	<p class="mt-1 text-sm text-base-content/60">{ i18n.T(ctx, "kit.auth.login_subtitle") }</p>
+
+	if p.Error != "" {
+		@Alert("error", p.Error, "")
+	}
+
+	<form method="post" action={ templ.SafeURL(p.BasePath + "/login") } class="mt-5 space-y-4">
+		<input type="hidden" name="_csrf" value={ p.CSRF }/>
+
+		@Field(FieldProps{
+			Name:  "email",
+			Label: i18n.T(ctx, "kit.auth.email"),
+			Value:    p.Email,
+			Type:     "email",
+			Required: true,
+			Attrs: templ.Attributes{"autocomplete": "username", "autofocus": true},
+		})
+
+		if p.PasswordLogin {
+			@Field(FieldProps{
+				Name:  "password",
+				Label:    i18n.T(ctx, "kit.auth.password"),
+				Type:     "password",
+				Required: true,
+				Attrs:    templ.Attributes{"autocomplete": "current-password"},
+			})
+		}
+
+		<button type="submit" class="btn btn-primary w-full gap-1.5">
+			@Icon("log-in", "size-4")
+			<span class="htmx-indicator loading loading-spinner loading-sm"></span>
+			{ i18n.T(ctx, "kit.auth.sign_in") }
+		</button>
+	</form>
+
+	if p.GoogleEnabled {
+		<div class="divider my-5 text-xs text-base-content/40"></div>
+		<a href={ templ.SafeURL(p.BasePath + "/login/google") } class="btn btn-outline w-full">
+			{ i18n.T(ctx, "kit.auth.sign_in_google") }
+		</a>
+	}
+}
+
+// tenantChooser appears when one email belongs to several institutions.
+//
+// Identity needs the password again to issue a token — it does not hold a
+// half-authenticated state between the two requests. Rather than smuggling the
+// password through a hidden field (where it would sit in the rendered HTML,
+// in the browser's back-forward cache, and in any proxy log), the user picks an
+// institution and confirms their password once more. One extra step, no
+// credential written into a page.
+templ tenantChooser(p LoginPage) {
+	<h2 class="text-lg font-semibold">{ i18n.T(ctx, "kit.auth.choose_institution") }</h2>
+	<p class="mt-1 text-sm text-base-content/60">{ i18n.T(ctx, "kit.auth.choose_institution_help") }</p>
+
+	if p.Error != "" {
+		@Alert("error", p.Error, "")
+	}
+
+	<form
+		method="post"
+		action={ templ.SafeURL(p.BasePath + "/login") }
+		class="mt-5 space-y-4"
+		x-data="{ slug: '' }"
+	>
+		<input type="hidden" name="_csrf" value={ p.CSRF }/>
+		<input type="hidden" name="email" value={ p.Email }/>
+		<input type="hidden" name="slug" x-model="slug"/>
+
+		<div class="space-y-2">
+			for _, t := range p.Tenants {
+				<label class="flex cursor-pointer items-center gap-3 rounded-lg border border-base-300 px-4 py-3 transition-colors hover:border-primary hover:bg-base-200">
+					<input
+						type="radio"
+						name="slug-choice"
+						class="radio radio-sm radio-primary"
+						value={ t.Slug }
+						x-model="slug"
+						required
+					/>
+					<span class="min-w-0">
+						<span class="block truncate text-sm font-medium">{ t.Name }</span>
+						<span class="block truncate text-xs text-base-content/50">{ t.Slug }</span>
+					</span>
+				</label>
+			}
+		</div>
+
+		@Field(FieldProps{
+			Name:  "password",
+			Label:    i18n.T(ctx, "kit.auth.password"),
+			Type:     "password",
+			Required: true,
+			Attrs:    templ.Attributes{"autocomplete": "current-password", "autofocus": true},
+		})
+
+		<button type="submit" class="btn btn-primary w-full gap-1.5" x-bind:disabled="!slug">
+			@Icon("log-in", "size-4")
+			{ i18n.T(ctx, "kit.auth.sign_in") }
+		</button>
+	</form>
+
+	<a href={ templ.SafeURL(p.BasePath + "/login") } class="btn btn-ghost btn-sm mt-3 w-full">
+		{ i18n.T(ctx, "kit.action.back") }
+	</a>
+}
+
+// ThemeOr is the login page's theme, defaulting to the one every existing screen
+// renders with.
+func (p LoginPage) ThemeOr() string {
+	if p.Theme != "" {
+		return p.Theme
+	}
+	return "schoolyze"
+}

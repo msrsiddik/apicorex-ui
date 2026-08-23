@@ -14,6 +14,14 @@ previous = "পূর্ববর্তী"
 search = "খুঁজুন"
 
 [kit.auth]
+choose_institution = "প্রতিষ্ঠান নির্বাচন করুন"
+choose_institution_help = "এই ইমেইলটি একাধিক প্রতিষ্ঠানে যুক্ত"
+email = "ইমেইল"
+login_subtitle = "আপনার প্রতিষ্ঠানের অ্যাকাউন্টে প্রবেশ করুন"
+login_title = "লগ ইন করুন"
+password = "পাসওয়ার্ড"
+sign_in = "প্রবেশ করুন"
+sign_in_google = "গুগল দিয়ে প্রবেশ"
 my_profile = "আমার প্রোফাইল"
 sign_out = "লগ আউট"
 
@@ -42,3 +50,6 @@ open_menu = "মেনু খুলুন"
 
 [kit.table]
 showing = "%s–%s দেখানো হচ্ছে, মোট %s"
+
+[kit.app]
+tagline = "শিক্ষা প্রতিষ্ঠান ব্যবস্থাপনা"
