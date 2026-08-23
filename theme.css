@@ -1,0 +1,73 @@
+/* The suite's panel theme.
+   ---------------------------------------------------------------------------
+   In the kit because every product in the suite should look like one product.
+   It lived in Schoolyze while Schoolyze was the only panel; the ledger's panel
+   then rendered in DaisyUI's stock purple beside Schoolyze's teal — same shell,
+   two companies.
+
+   Declared through DaisyUI's theme plugin rather than a bare @theme block: the
+   component classes read DaisyUI's own variables, so overriding --color-primary
+   in @theme alone leaves every button on the stock purple.
+
+   Import it from a consumer's app.css:
+
+       @import "tailwindcss";
+       @plugin "daisyui";
+       @import "<kit>/theme.css";
+
+   The name stays "schoolyze" for now because it is what every rendered page
+   already carries in data-theme, and renaming it is a change to markup rather
+   than to colour. Page.Theme selects between themes for a product that wants
+   its own.
+
+
+   Clean and calm (docs/web-plan.md §3). One primary — a muted teal that reads
+   as institutional without the "unvisited link" feel of a saturated blue —
+   against neutrals that carry the bulk of the page. Status colours are slightly
+   desaturated from DaisyUI's defaults so a table full of them stays readable
+   for eight hours; each is paired with an icon or word in the markup, never
+   colour alone. */
+@plugin "daisyui/theme" {
+  name: "schoolyze";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(98% 0.002 240);
+  --color-base-300: oklch(93% 0.004 240);
+  --color-base-content: oklch(25% 0.01 240);
+
+  --color-primary: oklch(52% 0.09 195);
+  --color-primary-content: oklch(99% 0 0);
+
+  --color-secondary: oklch(55% 0.07 250);
+  --color-secondary-content: oklch(99% 0 0);
+
+  --color-accent: oklch(60% 0.09 180);
+  --color-accent-content: oklch(99% 0 0);
+
+  --color-neutral: oklch(32% 0.01 240);
+  --color-neutral-content: oklch(98% 0 0);
+
+  --color-info: oklch(58% 0.10 240);
+  --color-info-content: oklch(99% 0 0);
+  --color-success: oklch(56% 0.12 150);
+  --color-success-content: oklch(99% 0 0);
+  --color-warning: oklch(68% 0.13 75);
+  --color-warning-content: oklch(20% 0.03 75);
+  --color-error: oklch(55% 0.18 25);
+  --color-error-content: oklch(99% 0 0);
+
+  /* Softly rounded, not pill-shaped: this is a working tool, and heavy
+     rounding reads as consumer-playful next to dense data. */
+  --radius-selector: 0.375rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
