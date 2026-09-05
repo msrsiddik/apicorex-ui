@@ -32,6 +32,12 @@ type TableToolbar struct {
 	Filters []SelectFilter
 	// Action is a primary button, typically "New student".
 	Action templ.Component
+
+	// SortKey and SortDesc are the ordering currently in force. They ride
+	// along as hidden fields so a search or a filter change keeps the sort
+	// the user chose instead of dropping back to the default order.
+	SortKey  string
+	SortDesc bool
 }
 
 // SelectFilter is one dropdown in the toolbar.
@@ -52,10 +58,19 @@ type Option struct {
 // Toolbar renders search and filters.
 //
 // Search is debounced rather than firing per keystroke: a 2,000-row query on
-// every letter would hammer the database and, on a slow connection, return
-// results out of order.
+// every letter would hammer the database. Debouncing alone does not order the
+// responses though — a slow query started three letters ago can still land
+// after a fast one — so every control also syncs on the target with
+// "replace", which cancels whatever is in flight. The last thing the user did
+// is the thing they see.
+//
+// hx-include names .list-toolbar rather than "closest .flex". The search input
+// sits inside its own flex box (the one holding the icon), so "closest" found
+// that instead of the toolbar and sent the search without the filters: pick a
+// class, type a name, and the class filter silently stopped applying while the
+// dropdown still showed it selected.
 templ Toolbar(t TableToolbar) {
-	<div class="mb-4 flex flex-wrap items-end gap-3">
+	<div class="list-toolbar mb-4 flex flex-wrap items-end gap-3">
 		if t.SearchName != "" {
 			<div class="min-w-56 flex-1">
 				<label class="sr-only" for={ t.SearchName }>
@@ -76,7 +91,8 @@ templ Toolbar(t TableToolbar) {
 						hx-target={ t.Target }
 						hx-swap="innerHTML"
 						hx-trigger="input changed delay:350ms, search"
-						hx-include="closest .flex"
+						hx-include="closest .list-toolbar"
+						hx-sync={ t.Target + ":replace" }
 						hx-indicator="#page-progress"
 					/>
 				</div>
@@ -90,6 +106,13 @@ templ Toolbar(t TableToolbar) {
 				@t.Action
 			</div>
 		}
+		<!-- The sort, carried rather than re-derived. These live in the
+		     toolbar because the toolbar is always on the page: putting them
+		     in the table would lose the sort exactly when a search returns
+		     nothing and the empty state renders instead. columnHeader keeps
+		     them current, since the toolbar itself is never re-rendered. -->
+		<input type="hidden" id="list-sort" name="sort" value={ t.SortKey }/>
+		<input type="hidden" id="list-desc" name="desc" value={ strconv.FormatBool(t.SortDesc) }/>
 	</div>
 }
 
@@ -105,7 +128,8 @@ templ selectFilter(f SelectFilter, t TableToolbar) {
 			hx-get={ t.Endpoint }
 			hx-target={ t.Target }
 			hx-swap="innerHTML"
-			hx-include="closest .flex"
+			hx-include="closest .list-toolbar"
+			hx-sync={ t.Target + ":replace" }
 			hx-indicator="#page-progress"
 		>
 			<option value="">{ f.AllLabel }</option>
@@ -200,6 +224,8 @@ templ columnHeader(col Column, p TableProps) {
 				hx-get={ sortURL(p, col.Sort) }
 				hx-target={ p.Target }
 				hx-swap="innerHTML"
+				hx-sync={ p.Target + ":replace" }
+				{ sortStateAttrs(col.Sort, nextDesc(p, col.Sort))... }
 				hx-indicator="#page-progress"
 			>
 				{ col.Label }
@@ -222,14 +248,35 @@ func ariaSort(desc bool) string {
 	return "ascending"
 }
 
+// nextDesc is the direction a click on key sorts in: the same column again
+// reverses, a different column starts ascending.
+func nextDesc(p TableProps, key string) bool {
+	return key == p.SortKey && !p.SortDesc
+}
+
+// sortStateAttrs writes the new ordering into the toolbar's hidden fields.
+//
+// The header button already carries sort in its own URL, so this changes
+// nothing about the request it is issuing — it is for the request after it,
+// when the user types in the search box and hx-include gathers the toolbar.
+// Ordering against htmx's own click handler therefore does not matter.
+// Spread as templ.Attributes because templ reserves hx-on: for a
+// templ.ComponentScript, and this is one statement with two constants in it
+// rather than anything worth a script block.
+func sortStateAttrs(key string, desc bool) templ.Attributes {
+	return templ.Attributes{
+		"hx-on:click": fmt.Sprintf(
+			"var s=document.getElementById('list-sort'),d=document.getElementById('list-desc');"+
+				"if(s){s.value=%q}if(d){d.value=%q}",
+			key, strconv.FormatBool(desc)),
+	}
+}
+
 // sortURL toggles direction when the active column is clicked again, and
 // resets to the first page — staying on page 7 of a differently ordered list
 // would land the user somewhere arbitrary.
 func sortURL(p TableProps, key string) string {
-	desc := false
-	if key == p.SortKey && !p.SortDesc {
-		desc = true
-	}
+	desc := nextDesc(p, key)
 	url := fmt.Sprintf("%s?sort=%s&desc=%t&offset=0&limit=%d", p.Endpoint, key, desc, p.Page.Limit)
 	if p.QueryTail != "" {
 		url += "&" + p.QueryTail
@@ -274,6 +321,7 @@ templ pageButton(p TableProps, offset int, label, ic string, disabled bool) {
 			hx-get={ pageURL(p, offset) }
 			hx-target={ p.Target }
 			hx-swap="innerHTML"
+			hx-sync={ p.Target + ":replace" }
 			hx-indicator="#page-progress"
 		>
 			@Icon(ic, "size-4")
